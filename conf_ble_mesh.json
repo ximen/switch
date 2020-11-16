@@ -1,1 +1,22 @@
-{}
+{
+    "device_name": "Switch x10",
+    "elements":[
+        {
+            "root": true
+        },{
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server1"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server1"
+                }
+            ]
+        }
+    ]
+}
