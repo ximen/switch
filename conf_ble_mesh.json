@@ -7,7 +7,7 @@
             "sig_models": [
                 {
                     "model": "generic_on_off_server",
-                    "short_name": "onoff_server1"
+                    "short_name": "onoff_server0"
                 }
             ]
         }, {
