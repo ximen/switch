@@ -18,4 +18,4 @@ void app_main(void){
     }
     esp_ble_mesh_register_generic_server_callback(example_ble_mesh_generic_server_cb);
     app_config_ble_mesh_init();
-}s
+}
