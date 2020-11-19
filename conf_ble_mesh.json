@@ -17,6 +17,63 @@
                     "short_name": "onoff_server1"
                 }
             ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server2"
+                }
+            ]
+         }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server3"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server4"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server5"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server6"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server7"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server8"
+                }
+            ]
+        }, {
+            "sig_models": [
+                {
+                    "model": "generic_on_off_server",
+                    "short_name": "onoff_server9"
+                }
+            ]
         }
+
     ]
 }
