@@ -16,8 +16,8 @@
 					"name": "MQTT",
 					"short_name": "mqtt_enable",
 					"type": "boolean"
-				}, {
-					"name": "Bluetooth mesh",
+					}, {
+							"name": "Bluetooth mesh",
 					"short_name": "ble_mesh_enable",
 					"type": "boolean"
 				}]      
@@ -33,52 +33,62 @@
 				"name": "Channel 1",
 				"short_name": "topic1_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel1"
 			}, {
 				"name": "Channel 2",
 				"short_name": "topic2_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel2"
 			}, {
 				"name": "Channel 3",
 				"short_name": "topic3_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel3"
 			}, {
 				"name": "Channel 4",
 				"short_name": "topic4_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel4"
 			}, {
 				"name": "Channel 5",
 				"short_name": "topic5_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel4"
 			}, {
 				"name": "Channel 6",
 				"short_name": "topic6_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel5"
 			}, {
 				"name": "Channel 7",
 				"short_name": "topic7_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel7"
 			}, {
 				"name": "Channel 8",
 				"short_name": "topic8_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel8"
 			}, {
 				"name": "Channel 9",
 				"short_name": "topic9_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel9"
 			}, {
 				"name": "Channel 10",
 				"short_name": "topic10_element",
 				"type": "string",
-				"size": "50"
+				"size": "50",
+				"default": "switch/channel10"
 			}
 			]
 		}

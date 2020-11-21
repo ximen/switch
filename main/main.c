@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include "app_config.h"
 #include "app_config_ble_mesh.h"
+#include "esp_ble_mesh_networking_api.h"
 #include "esp_ble_mesh_generic_model_api.h"
 #include "esp_ble_mesh_local_data_operation_api.h"
 #include "sdkconfig.h"
@@ -9,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "driver/gpio.h"
+#include "mqtt_client.h"
 
 #define TASK_STACK_SIZE 4096
 #define QUEUE_LENGTH    5
@@ -19,6 +21,8 @@
 #define ON_LEVEL		ACTIVE_LEVEL
 #define OFF_LEVEL		!ACTIVE_LEVEL
 #define TAG "MAIN"
+
+static esp_mqtt_client_handle_t client;
 
 gpio_num_t outputs[CHANNEL_NUMBER] = {
 		GPIO_NUM_12,
@@ -116,6 +120,48 @@ static void example_ble_mesh_generic_server_cb(esp_ble_mesh_generic_server_cb_ev
     }
 }
 
+char *get_mqtt_topic(uint8_t channel){
+    char *topic;
+    char topic_name[CONFIG_APP_CONFIG_SHORT_NAME_LEN];
+    sprintf(topic_name, "topic%d_element", channel + 1);
+    esp_err_t err = app_config_getValue(topic_name, string, &topic);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Error retrieving topic %s", topic_name);
+        return NULL;
+    }
+    return topic;
+}
+
+void notify(queue_value_t state){
+    bool config_mesh_enable;
+    bool config_mqtt_enable;
+    app_config_getBool("ble_mesh_enable", &config_mesh_enable);
+    app_config_getBool("mqtt_enable", &config_mqtt_enable);
+    if (config_mesh_enable) {
+        ESP_LOGI(TAG, "BLE Mesh enabled, notifying");
+        esp_ble_mesh_elem_t *element = esp_ble_mesh_find_element(esp_ble_mesh_get_primary_element_address() + state.channel + 1);
+        esp_ble_mesh_model_t *model = esp_ble_mesh_find_sig_model(element, ESP_BLE_MESH_MODEL_ID_GEN_ONOFF_SRV);
+        esp_ble_mesh_server_state_value_t value = {.gen_onoff.onoff = state.state};
+        ESP_LOGI(TAG, "Updating server value. Element: %d, Model: %d", element->element_addr, model->model_idx);
+        esp_ble_mesh_server_model_update_state(model, ESP_BLE_MESH_GENERIC_ONOFF_STATE, &value);
+    }
+    if (config_mqtt_enable){
+        char *topic = get_mqtt_topic(state.channel);
+        char status_topic[58] = {0};
+        strncat(status_topic, topic, 50);
+        strcat(status_topic, "/status");
+        if (strlen(topic) > 0){
+            ESP_LOGI(TAG, "Publishing MQTT status. Topic %s, value %d", topic, state.state);
+            if(state.state) esp_mqtt_client_publish(client, status_topic, "ON", 0, 1, 1);
+            else esp_mqtt_client_publish(client, status_topic, "OFF", 0, 1, 1);
+        }
+        else{
+            ESP_LOGI(TAG,"Topic not specified");
+        }
+    }
+}
+
 static void worker_task( void *pvParameters ){
     for (;;){
         queue_value_t item;
@@ -123,6 +169,7 @@ static void worker_task( void *pvParameters ){
         if( xStatus == pdPASS ){
             ESP_LOGI(TAG, "Received from queue: channel=%d, value=%d", item.channel, item.state);
             if (item.state == 0) gpio_set_level(item.channel, OFF_LEVEL); else gpio_set_level(item.channel, ON_LEVEL);
+            notify(item);
         }
         else {
             ESP_LOGI(TAG, "Queue receive timed out");
@@ -130,19 +177,116 @@ static void worker_task( void *pvParameters ){
     }
 }
 
+static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event){
+    esp_mqtt_client_handle_t client = event->client;
+    int msg_id;
+    // your_context_t *context = event->context;
+    switch (event->event_id) {
+            case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+            for(uint8_t i=0; i<CHANNEL_NUMBER; i++){
+                char *topic = get_mqtt_topic(i);
+                if(strlen(topic) > 0){
+                    ESP_LOGI(TAG, "Subscribing %s", topic);
+                    msg_id = esp_mqtt_client_subscribe(client, topic, 1);
+                }
+            }
+            break;
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+            break;
+        case MQTT_EVENT_SUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED");
+            break;
+        case MQTT_EVENT_UNSUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
+            break;
+        case MQTT_EVENT_PUBLISHED:
+            ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
+            break;
+        case MQTT_EVENT_DATA:
+            ESP_LOGI(TAG, "MQTT_EVENT_DATA");
+            printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+            printf("DATA=%.*s\r\n", event->data_len, event->data);
+            for(uint8_t i=0; i < CHANNEL_NUMBER; i++){
+                char *topic = get_mqtt_topic(i);
+                if(strlen(topic) == 0){
+                    ESP_LOGI(TAG, "Empty topic %d", i);
+                    continue;
+                }
+                if(strncmp(event->topic, topic, event->topic_len) == 0){
+                    if(strncmp(event->data, "ON", event->data_len) == 0){
+                        ESP_LOGI(TAG, "Got ON");
+                        queue_value(i, 1);
+                    } else if (strncmp(event->data, "OFF", event->data_len) == 0){
+                        ESP_LOGI(TAG, "Got OFF");
+                        queue_value(i, 0);
+                    } else {
+                        ESP_LOGW(TAG, "Error parsing payload");
+                    }
+                    break;
+                }
+            }
+            break;
+        case MQTT_EVENT_ERROR:
+            ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+            break;
+        default:
+            ESP_LOGI(TAG, "Other event id:%d", event->event_id);
+            break;
+    }
+    return ESP_OK;
+}
+
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
+    mqtt_event_handler_cb(event_data);
+}
+
 void app_main(void){
     ESP_ERROR_CHECK(app_config_init());		    // Initializing and loading configuration
-    esp_err_t err = bluetooth_init();
-    if (err) {
-        ESP_LOGE(TAG, "bluetooth_init failed (err %d)", err);
-        return;
-    }
-    esp_ble_mesh_register_generic_server_callback(example_ble_mesh_generic_server_cb);
     state_queue = xQueueCreate(QUEUE_LENGTH, sizeof(queue_value_t));
     if(!state_queue){
         ESP_LOGE(TAG, "Error creating queue");
         return;
     }
-    xTaskCreate(worker_task, "Worker1", TASK_STACK_SIZE, NULL, 1, NULL );
-    app_config_ble_mesh_init();
+    if (xTaskCreate(worker_task, "Worker1", TASK_STACK_SIZE, NULL, 1, NULL ) != pdPASS){
+        ESP_LOGE(TAG, "Error creating worker task");
+        return;
+    }
+    bool config_mesh_enable;
+    app_config_getBool("ble_mesh_enable", &config_mesh_enable);
+    if (config_mesh_enable){
+        ESP_LOGI(TAG, "BLE Mesh enabled");
+        esp_err_t err = bluetooth_init();
+        if (err) {
+            ESP_LOGE(TAG, "bluetooth_init failed (err %d)", err);
+            return;
+        }
+        esp_ble_mesh_register_generic_server_callback(example_ble_mesh_generic_server_cb);
+        app_config_ble_mesh_init();
+    }
+    bool config_mqtt_enable;
+    app_config_getBool("mqtt_enable", &config_mqtt_enable);
+    if(config_mqtt_enable){
+        ESP_LOGI(TAG, "MQTT enabled");
+        char *mqtt_broker;
+        char mqtt_uri[CONFIG_APP_CONFIG_MQTT_BROKER_LEN + 14];
+        esp_err_t err = app_config_getValue("std_mqtt_broker", string, &mqtt_broker);
+        if (err == ESP_OK){
+            int16_t port;
+            err = app_config_getValue("std_mqtt_port", int16, &port);
+            if (err != ESP_OK) port = 1883;
+            sprintf(mqtt_uri, "mqtt://%s:%d", mqtt_broker, (uint16_t)port);
+            ESP_LOGI(TAG, "MQTT connect string %s", mqtt_uri);
+            esp_mqtt_client_config_t mqtt_cfg = {
+                .uri = mqtt_uri,
+            };
+            client = esp_mqtt_client_init(&mqtt_cfg);
+            esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
+            esp_mqtt_client_start(client);
+        } else {
+            ESP_LOGE(TAG, "Error retrieving MQTT broker string");
+        }
+    }
 }
