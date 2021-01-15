@@ -23,6 +23,8 @@
 #define OFF_LEVEL		!ACTIVE_LEVEL
 #define TAG "MAIN"
 #define RESET_TIME_MS   3000
+#define ALLOC_ERR_STR   "Error allocating buffer!"
+#define AVAIL_TOPIC     "/available"
 
 static esp_mqtt_client_handle_t client;
 app_config_cbs_t app_cbs;
@@ -281,6 +283,25 @@ void app_main(void){
     gpio_set_intr_type(BUTTON_PIN, GPIO_INTR_ANYEDGE);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(BUTTON_PIN, gpio_isr_handler, (void*) NULL);
+
+    for (uint8_t i = 0; i < CHANNEL_NUMBER; i++){
+        char element[17] = {0};
+        sprintf(element, "topic%d_element", i + 1);
+        char *base_path;
+        app_config_getValue(element, string, &base_path);
+        if(strlen(base_path)){
+            char *avail_topic = calloc(strlen(base_path) + sizeof(AVAIL_TOPIC) + 1, sizeof(char));
+            if (avail_topic) {
+                strncat(avail_topic, base_path, strlen(base_path) + 1);
+                strncat(avail_topic, AVAIL_TOPIC, sizeof(AVAIL_TOPIC) + 1);
+                app_cbs.lwt.topic = avail_topic;
+                app_cbs.lwt.msg = "offline";
+            } else {
+                ESP_LOGE(TAG, ALLOC_ERR_STR);
+                free(base_path);
+            }
+        }
+    }
 
     app_cbs.config_srv = app_ble_mesh_config_server_cb;
     app_cbs.generic_srv = example_ble_mesh_generic_server_cb;
