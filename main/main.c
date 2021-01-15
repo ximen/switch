@@ -24,7 +24,11 @@
 #define TAG "MAIN"
 #define RESET_TIME_MS   3000
 #define ALLOC_ERR_STR   "Error allocating buffer!"
+#define ONLINE_MSG      "online"
+#define OFFLINE_MSG     "offline"
 #define AVAIL_TOPIC     "/available"
+#define ON_MSG          "ON"
+#define OFF_MSG         "OFF"
 
 static esp_mqtt_client_handle_t client;
 app_config_cbs_t app_cbs;
@@ -57,7 +61,7 @@ void reset_timer_cb(TimerHandle_t xTimer){
 }
 
 static void IRAM_ATTR gpio_isr_handler(void* arg){
-    if (gpio_get_level(BUTTON_PIN == 0)){
+    if (gpio_get_level(BUTTON_PIN) == 0){
         xTimerStartFromISR(reset_timer, 0);
     } else {
         xTimerStopFromISR(reset_timer, 0);
@@ -165,6 +169,21 @@ char *get_mqtt_topic(uint8_t channel){
     return topic;
 }
 
+void app_mqtt_notify_status(queue_value_t state){
+        char *topic = get_mqtt_topic(state.channel);
+        char status_topic[58] = {0};
+        strncat(status_topic, topic, 50);
+        strcat(status_topic, "/status");
+        if (strlen(topic) > 0){
+            ESP_LOGI(TAG, "Publishing MQTT status. Topic %s, value %d", topic, state.state);
+            if(state.state) esp_mqtt_client_publish(client, status_topic, ON_MSG, 0, 1, 1);
+            else esp_mqtt_client_publish(client, status_topic, OFF_MSG, 0, 1, 1);
+        }
+        else{
+            ESP_LOGI(TAG,"Topic not specified");
+        }
+}
+
 void notify(queue_value_t state){
     bool config_mesh_enable;
     bool config_mqtt_enable;
@@ -179,18 +198,7 @@ void notify(queue_value_t state){
         esp_ble_mesh_server_model_update_state(model, ESP_BLE_MESH_GENERIC_ONOFF_STATE, &value);
     }
     if (config_mqtt_enable){
-        char *topic = get_mqtt_topic(state.channel);
-        char status_topic[58] = {0};
-        strncat(status_topic, topic, 50);
-        strcat(status_topic, "/status");
-        if (strlen(topic) > 0){
-            ESP_LOGI(TAG, "Publishing MQTT status. Topic %s, value %d", topic, state.state);
-            if(state.state) esp_mqtt_client_publish(client, status_topic, "ON", 0, 1, 1);
-            else esp_mqtt_client_publish(client, status_topic, "OFF", 0, 1, 1);
-        }
-        else{
-            ESP_LOGI(TAG,"Topic not specified");
-        }
+        app_mqtt_notify_status(state);
     }
 }
 
@@ -209,6 +217,25 @@ static void worker_task( void *pvParameters ){
     }
 }
 
+void app_mqtt_notify_avail(uint8_t channel, char* msg){
+    char element[17] = {0};
+    sprintf(element, "topic%d_element", channel + 1);
+    char *base_path;
+    app_config_getValue(element, string, &base_path);
+    if(strlen(base_path)){
+        char *avail_topic = calloc(strlen(base_path) + sizeof(AVAIL_TOPIC) + 1, sizeof(char));
+        if (avail_topic) {
+            strncat(avail_topic, base_path, strlen(base_path) + 1);
+            strncat(avail_topic, AVAIL_TOPIC, sizeof(AVAIL_TOPIC) + 1);
+            app_config_mqtt_publish(avail_topic, msg, true);
+        } else {
+            ESP_LOGE(TAG, ALLOC_ERR_STR);
+            free(base_path);
+        }
+        free(avail_topic);
+    }
+}
+
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event){
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
@@ -222,6 +249,11 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event){
                     ESP_LOGI(TAG, "Subscribing %s", topic);
                     msg_id = esp_mqtt_client_subscribe(client, topic, 1);
                 }
+                app_mqtt_notify_avail(i, ONLINE_MSG);
+                queue_value_t state;
+                state.channel = i;
+                state.state = gpio_get_level(outputs[i]);
+                app_mqtt_notify_status(state);
             }
             break;
         case MQTT_EVENT_DISCONNECTED:
@@ -247,10 +279,10 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event){
                     continue;
                 }
                 if(strncmp(event->topic, topic, event->topic_len) == 0){
-                    if(strncmp(event->data, "ON", event->data_len) == 0){
+                    if(strncmp(event->data, ON_MSG, event->data_len) == 0){
                         ESP_LOGI(TAG, "Got ON");
                         queue_value(i, 1);
-                    } else if (strncmp(event->data, "OFF", event->data_len) == 0){
+                    } else if (strncmp(event->data, OFF_MSG, event->data_len) == 0){
                         ESP_LOGI(TAG, "Got OFF");
                         queue_value(i, 0);
                     } else {
@@ -295,7 +327,7 @@ void app_main(void){
                 strncat(avail_topic, base_path, strlen(base_path) + 1);
                 strncat(avail_topic, AVAIL_TOPIC, sizeof(AVAIL_TOPIC) + 1);
                 app_cbs.lwt.topic = avail_topic;
-                app_cbs.lwt.msg = "offline";
+                app_cbs.lwt.msg = OFFLINE_MSG;
             } else {
                 ESP_LOGE(TAG, ALLOC_ERR_STR);
                 free(base_path);
