@@ -30,7 +30,7 @@
 #define ON_MSG          "ON"
 #define OFF_MSG         "OFF"
 
-static esp_mqtt_client_handle_t client;
+//static esp_mqtt_client_handle_t client;
 app_config_cbs_t app_cbs;
 TimerHandle_t   reset_timer;
 
@@ -176,8 +176,8 @@ void app_mqtt_notify_status(queue_value_t state){
         strcat(status_topic, "/status");
         if (strlen(topic) > 0){
             ESP_LOGI(TAG, "Publishing MQTT status. Topic %s, value %d", topic, state.state);
-            if(state.state) esp_mqtt_client_publish(client, status_topic, ON_MSG, 0, 1, 1);
-            else esp_mqtt_client_publish(client, status_topic, OFF_MSG, 0, 1, 1);
+            if(state.state) app_config_mqtt_publish(status_topic, ON_MSG, 1);
+            else app_config_mqtt_publish(status_topic, OFF_MSG, 1);
         }
         else{
             ESP_LOGI(TAG,"Topic not specified");
