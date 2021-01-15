@@ -23,6 +23,7 @@
 #define TAG "MAIN"
 
 static esp_mqtt_client_handle_t client;
+app_config_cbs_t app_cbs;
 
 gpio_num_t outputs[CHANNEL_NUMBER] = {
 		GPIO_NUM_12,
@@ -77,6 +78,20 @@ uint8_t get_channel_number(esp_ble_mesh_model_t *model, esp_ble_mesh_msg_ctx_t *
     }
     return 0xFF;
 } 
+
+static void app_ble_mesh_config_server_cb(esp_ble_mesh_cfg_server_cb_event_t event, esp_ble_mesh_cfg_server_cb_param_t *param){
+    if (event == ESP_BLE_MESH_CFG_SERVER_STATE_CHANGE_EVT){
+        switch (param->ctx.recv_op) {
+            case ESP_BLE_MESH_MODEL_OP_NODE_RESET:
+                ESP_LOGW(TAG, "Resetting Ble mesh node!");
+                esp_ble_mesh_node_local_reset();
+                break;
+            default:
+                break;
+        }
+        
+    }
+}
 
 static void example_ble_mesh_generic_server_cb(esp_ble_mesh_generic_server_cb_event_t event, esp_ble_mesh_generic_server_cb_param_t *param){
     esp_ble_mesh_gen_onoff_srv_t *srv;
@@ -244,7 +259,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 }
 
 void app_main(void){
-    ESP_ERROR_CHECK(app_config_init());		    // Initializing and loading configuration
+    app_cbs.config_srv = app_ble_mesh_config_server_cb;
+    app_cbs.generic_srv = example_ble_mesh_generic_server_cb;
+    app_cbs.mqtt = mqtt_event_handler;
+
+    ESP_ERROR_CHECK(app_config_init(&app_cbs));		    // Initializing and loading configuration
     state_queue = xQueueCreate(QUEUE_LENGTH, sizeof(queue_value_t));
     if(!state_queue){
         ESP_LOGE(TAG, "Error creating queue");
@@ -253,40 +272,5 @@ void app_main(void){
     if (xTaskCreate(worker_task, "Worker1", TASK_STACK_SIZE, NULL, 1, NULL ) != pdPASS){
         ESP_LOGE(TAG, "Error creating worker task");
         return;
-    }
-    bool config_mesh_enable;
-    app_config_getBool("ble_mesh_enable", &config_mesh_enable);
-    if (config_mesh_enable){
-        ESP_LOGI(TAG, "BLE Mesh enabled");
-        esp_err_t err = bluetooth_init();
-        if (err) {
-            ESP_LOGE(TAG, "bluetooth_init failed (err %d)", err);
-            return;
-        }
-        esp_ble_mesh_register_generic_server_callback(example_ble_mesh_generic_server_cb);
-        app_config_ble_mesh_init();
-    }
-    bool config_mqtt_enable;
-    app_config_getBool("mqtt_enable", &config_mqtt_enable);
-    if(config_mqtt_enable){
-        ESP_LOGI(TAG, "MQTT enabled");
-        char *mqtt_broker;
-        char mqtt_uri[CONFIG_APP_CONFIG_MQTT_BROKER_LEN + 14];
-        esp_err_t err = app_config_getValue("std_mqtt_broker", string, &mqtt_broker);
-        if (err == ESP_OK){
-            int16_t port;
-            err = app_config_getValue("std_mqtt_port", int16, &port);
-            if (err != ESP_OK) port = 1883;
-            sprintf(mqtt_uri, "mqtt://%s:%d", mqtt_broker, (uint16_t)port);
-            ESP_LOGI(TAG, "MQTT connect string %s", mqtt_uri);
-            esp_mqtt_client_config_t mqtt_cfg = {
-                .uri = mqtt_uri,
-            };
-            client = esp_mqtt_client_init(&mqtt_cfg);
-            esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
-            esp_mqtt_client_start(client);
-        } else {
-            ESP_LOGE(TAG, "Error retrieving MQTT broker string");
-        }
     }
 }
