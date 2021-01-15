@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOSConfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/timers.h"
 #include "driver/gpio.h"
 #include "mqtt_client.h"
 
@@ -21,9 +22,11 @@
 #define ON_LEVEL		ACTIVE_LEVEL
 #define OFF_LEVEL		!ACTIVE_LEVEL
 #define TAG "MAIN"
+#define RESET_TIME_MS   3000
 
 static esp_mqtt_client_handle_t client;
 app_config_cbs_t app_cbs;
+TimerHandle_t   reset_timer;
 
 gpio_num_t outputs[CHANNEL_NUMBER] = {
 		GPIO_NUM_12,
@@ -46,6 +49,18 @@ typedef struct {
     uint8_t channel;
     uint8_t state;
 } queue_value_t;
+
+void reset_timer_cb(TimerHandle_t xTimer){
+    app_config_erase();
+}
+
+static void IRAM_ATTR gpio_isr_handler(void* arg){
+    if (gpio_get_level(BUTTON_PIN == 0)){
+        xTimerStartFromISR(reset_timer, 0);
+    } else {
+        xTimerStopFromISR(reset_timer, 0);
+    }
+}
 
 void queue_value(uint8_t channel, uint8_t value){
     queue_value_t item;
@@ -259,6 +274,14 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 }
 
 void app_main(void){
+    reset_timer = xTimerCreate("reset_timer", RESET_TIME_MS / portTICK_PERIOD_MS, pdFALSE, NULL, reset_timer_cb);
+    gpio_reset_pin(BUTTON_PIN);
+    gpio_pullup_dis(BUTTON_PIN);
+    gpio_pulldown_dis(BUTTON_PIN);
+    gpio_set_intr_type(BUTTON_PIN, GPIO_INTR_ANYEDGE);
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(BUTTON_PIN, gpio_isr_handler, (void*) NULL);
+
     app_cbs.config_srv = app_ble_mesh_config_server_cb;
     app_cbs.generic_srv = example_ble_mesh_generic_server_cb;
     app_cbs.mqtt = mqtt_event_handler;
