@@ -47,14 +47,25 @@ void app_board_init(){
     gpio_set_intr_type(BUTTON_PIN, GPIO_INTR_ANYEDGE);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(BUTTON_PIN, gpio_isr_handler, (void*) NULL);
+
+    for (uint8_t i=0; i<CHANNEL_NUMBER; i++){
+        gpio_reset_pin(outputs[i]);
+        gpio_intr_disable(outputs[i]);
+        gpio_set_direction(outputs[i], GPIO_MODE_OUTPUT);
+        gpio_pullup_dis(outputs[i]);
+        gpio_pulldown_dis(outputs[i]);
+        gpio_set_level(outputs[i], OFF_LEVEL);
+        gpio_set_intr_type(outputs[i], GPIO_INTR_DISABLE);
+    }
+
 }
 
 void app_board_on_channel(uint8_t channel){
-    gpio_set_level(channel, ON_LEVEL);
+    gpio_set_level(outputs[channel], ON_LEVEL);
 }
 
 void app_board_off_channel(uint8_t channel){
-    gpio_set_level(channel, OFF_LEVEL);
+    gpio_set_level(outputs[channel], OFF_LEVEL);
 }
 
 uint8_t app_board_get_channel(uint8_t channel){

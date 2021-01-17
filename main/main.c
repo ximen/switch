@@ -15,6 +15,7 @@
 app_config_cbs_t app_cbs;
 
 void app_main(void){
+    app_board_init();
     app_cbs.config_srv = app_ble_mesh_config_server_cb;
     app_cbs.generic_srv = example_ble_mesh_generic_server_cb;
     app_cbs.mqtt = mqtt_event_handler;

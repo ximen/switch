@@ -51,8 +51,7 @@ static void worker_task( void *pvParameters ){
             ESP_LOGI(TAG, "Received from queue: channel=%d, value=%d", item.channel, item.state);
             if (item.state == 0) app_board_off_channel(item.channel); else app_board_on_channel(item.channel);
             notify(item);
-        }
-        else {
+        } else {
             ESP_LOGI(TAG, "Queue receive timed out");
         }        
     }
