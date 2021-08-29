@@ -2,3 +2,4 @@
 build/
 sdkconfig.old
 config.html
+server_certs/ca_cert.pem

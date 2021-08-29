@@ -2,6 +2,10 @@
 #define _APP_COMMON_H_
 
 #include <stdint.h>
+#include "app_config_mqtt_switch.h"
+#include "app_board.h"
+
+app_config_mqtt_switch_t *switches[CHANNEL_NUMBER];
 
 typedef struct {
     uint8_t channel;

@@ -9,6 +9,9 @@
 			"default_ssid": "Switch_x10",
 			"default_psk": ""
 		}, {
+			"name": "OTA",
+			"std_ota": true
+		}, {
             "name": "Services",
 			"short_name": "services_topic",
 			"elements": [

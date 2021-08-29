@@ -2,7 +2,7 @@
 #include "app_common.h"
 #include "app_config.h"
 #include "app_board.h"
-#include "app_mqtt.h"
+#include "app_config_mqtt_switch.h"
 #include "freertos/FreeRTOS.h"
 #include "esp_ble_mesh_local_data_operation_api.h"
 #include "esp_ble_mesh_networking_api.h"
@@ -39,7 +39,9 @@ void notify(queue_value_t state){
         esp_ble_mesh_server_model_update_state(model, ESP_BLE_MESH_GENERIC_ONOFF_STATE, &value);
     }
     if (config_mqtt_enable){
-        app_mqtt_notify_status(state);
+        //app_mqtt_notify_status(state);
+        if(switches[state.channel]->state != state.state)
+            app_config_mqtt_switch_set(state.state, switches[state.channel]);
     }
 }
 
